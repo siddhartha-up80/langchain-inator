@@ -1,9 +1,20 @@
+import dotenv from "dotenv";
+dotenv.config({ path: ".env.local" });
+// Configure dotenv before other imports
+import { DocumentInterface } from "@langchain/core/documents";
+import { Redis } from "@upstash/redis";
 import { DirectoryLoader } from "langchain/document_loaders/fs/directory";
 import { TextLoader } from "langchain/document_loaders/fs/text";
-import { DocumentInterface } from "@langchain/core/documents";
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
+import { getEmbeddingsCollection, getVectorStore } from "../src/lib/astradb";
 
 async function generateEmbeddings() {
+  await Redis.fromEnv().flushdb();
+
+  const vectorStore = await getVectorStore();
+
+  (await getEmbeddingsCollection()).deleteMany({});
+
   const loader = new DirectoryLoader(
     "src/app/",
     {
@@ -18,7 +29,7 @@ async function generateEmbeddings() {
       const url =
         doc.metadata.source
           .replace(/\\/g, "/")
-          .split("src/app/")[1]
+          .split("/src/app")[1]
           .split("/page.")[0] || "/";
 
       const pageContentTrimmed = doc.pageContent
@@ -35,11 +46,9 @@ async function generateEmbeddings() {
 
   const splitter = RecursiveCharacterTextSplitter.fromLanguage("html");
 
-  const splitDocs = await splitter.splitDocuments(docs)
+  const splitDocs = await splitter.splitDocuments(docs);
 
-  
-//   console.log(splitDocs)
-  //   console.log(docs);
+  await vectorStore.addDocuments(splitDocs);
 }
 
 generateEmbeddings();
